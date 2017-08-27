@@ -24,8 +24,6 @@ class ModelConfig(object):
 
         self.learning_rate = 1e-4
 
-        self.optimizer = 'Adam'
-
 
 class TrainingConfig(object):
     """Wrapper class for training hyperparameters."""
@@ -34,6 +32,10 @@ class TrainingConfig(object):
         """Sets the default training hyperparameters."""
         
         self.epochs = 10
+
+        self.batch_size = 32
+
+        self.keep_rate = 0.5
 
 
 
