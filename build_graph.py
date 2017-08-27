@@ -1,0 +1,116 @@
+import tensorflow as tf 
+
+def build_graph(config):
+    """This function builds the graph for a deep net for classifying images.
+    Args:
+      config: Model configuration object
+    Returns:
+      A tuple (y, keep_prob). y is a tensor of shape (N_examples, 10), with values
+      equal to the logits of classifying the digit into one of 10 classes (the
+      digits 0-9). keep_prob is a scalar placeholder for the probability of
+      dropout.
+    """
+
+    x = tf.placeholder(tf.float32, [None, int(config.image_height * config.image_width)])
+    y = tf.placeholder(tf.float32, [None, int(config.num_classes)])
+
+    # Reshape to use within a convolutional neural net.
+    # Last dimension is for "channels" - there is only one here, since images are
+    # grayscale -- it would be 3 for an RGB image, 4 for RGBA, etc.
+    with tf.name_scope('reshape'):
+        x_image = tf.reshape(x, [-1, config.image_height, config.image_width, config.image_channels])
+
+    # First convolutional layer - maps one grayscale image to 32 feature maps.
+    with tf.name_scope('conv1'):
+        W_conv1 = weight_variable([config.filter_size, config.filter_size, config.image_channels, config.conv1_num_filters], name = 'W')
+        b_conv1 = bias_variable([config.conv1_num_filters], name = 'b')
+        h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
+
+    # Pooling layer - downsamples by 2X.
+    with tf.name_scope('pool1'):
+        h_pool1 = max_pool_2x2(h_conv1)
+
+    # Second convolutional layer -- maps 32 feature maps to 64.
+    with tf.name_scope('conv2'):
+        W_conv2 = weight_variable([config.filter_size, config.filter_size, config.conv1_num_filters, config.conv2_num_filters], name = 'W')
+        b_conv2 = bias_variable([config.conv2_num_filters], name = 'b')
+        h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
+
+    # Second pooling layer.
+    with tf.name_scope('pool2'):
+        h_pool2 = max_pool_2x2(h_conv2)
+
+    # Fully connected layer 1 -- after 2 round of downsampling, our 28x28 image
+    # is down to 7x7x64 feature maps -- maps this to 1024 features.
+    feature_map_flattened_dim = int((config.image_height/(2*2)) * (config.image_width/(2*2)) * config.conv2_num_filters)
+    with tf.name_scope('fc1'):
+        W_fc1 = weight_variable([feature_map_flattened_dim, config.fc1_num_features], name = 'W')
+        b_fc1 = bias_variable([config.fc1_num_features], name = 'b')
+
+    h_pool2_flat = tf.reshape(h_pool2, [-1, feature_map_flattened_dim])
+    h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
+
+    # Dropout - controls the complexity of the model, prevents co-adaptation of
+    # features.
+    with tf.name_scope('dropout'):
+        keep_prob = tf.placeholder(tf.float32)
+        h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
+
+    # Map the 1024 features to 10 classes, one for each digit
+    with tf.name_scope('fc2'):
+        W_fc2 = weight_variable([config.fc1_num_features, config.num_classes], name = 'W')
+        b_fc2 = bias_variable([config.num_classes], name = 'b')
+
+    # Raw predictions - logits
+    with tf.name_scope('logits'):
+        logits = tf.matmul(h_fc1_drop, W_fc2) + b_fc2
+
+    with tf.name_scope('probabilities'):
+        probs = tf.nn.softmax(logits)
+
+    with tf.name_scope('loss'):
+        loss = tf.nn.softmax_cross_entropy_with_logits(labels=y,
+                                                       logits=logits)
+    loss = tf.reduce_mean(loss)
+
+    with tf.name_scope('adam_optimizer'):
+        train_step = tf.train.AdamOptimizer(config.learning_rate).minimize(loss)
+
+    with tf.name_scope('accuracy'):
+        correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(y, 1))
+        correct_prediction = tf.cast(correct_prediction, tf.float32)
+    accuracy = tf.reduce_mean(correct_prediction)
+
+    saver = tf.train.Saver
+
+    # Return the model in dict
+    return dict(
+        x = x, 
+        y = y, 
+        keep_prob = keep_prob, 
+        logits = logits, 
+        probs = probs, 
+        loss = loss, 
+        train_step = train_step, 
+        accuracy = accuracy, 
+        saver = saver, 
+        )
+
+def conv2d(x, W):
+  """conv2d returns a 2d convolution layer with full stride."""
+  return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
+
+def max_pool_2x2(x):
+  """max_pool_2x2 downsamples a feature map by 2X."""
+  return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
+                        strides=[1, 2, 2, 1], padding='SAME')
+
+def weight_variable(shape, name = None):
+  """weight_variable generates a weight variable of a given shape."""
+  initial = tf.truncated_normal(shape, stddev=0.1)
+  return tf.Variable(initial, name = name)
+
+def bias_variable(shape, name = None):
+  """bias_variable generates a bias variable of a given shape."""
+  initial = tf.constant(0.1, shape=shape)
+  return tf.Variable(initial, name = name)
