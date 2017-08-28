@@ -6,9 +6,9 @@ class ModelConfig(object):
     def __init__(self):
         """Sets the default model hyperparameters."""
 
-        self.image_height = 28
+        self.image_height = 32
 
-        self.image_width = 28
+        self.image_width = 32
 
         self.num_classes = 10
 

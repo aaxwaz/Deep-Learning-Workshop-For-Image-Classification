@@ -11,14 +11,8 @@ def build_graph(config):
       dropout.
     """
 
-    x = tf.placeholder(tf.float32, [None, int(config.image_height * config.image_width)])
+    x_image = tf.placeholder(tf.float32, [None, config.image_height, config.image_width, config.image_channels])
     y = tf.placeholder(tf.float32, [None, int(config.num_classes)])
-
-    # Reshape to use within a convolutional neural net.
-    # Last dimension is for "channels" - there is only one here, since images are
-    # grayscale -- it would be 3 for an RGB image, 4 for RGBA, etc.
-    with tf.name_scope('reshape'):
-        x_image = tf.reshape(x, [-1, config.image_height, config.image_width, config.image_channels])
 
     # First convolutional layer - maps one grayscale image to 32 feature maps.
     with tf.name_scope('conv1'):
@@ -85,7 +79,7 @@ def build_graph(config):
 
     # Return the model in dict
     return dict(
-        x = x, 
+        x = x_image, 
         y = y, 
         keep_prob = keep_prob, 
         logits = logits, 

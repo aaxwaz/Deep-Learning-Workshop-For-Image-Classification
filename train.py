@@ -37,18 +37,18 @@ def train_model_for_one_epoch(iterations, train_x, train_y, model, sess, config,
         batch_y = train_y[idx, :]
 
         if record_train_loss: 
-            _, temp_loss = sess.run([model['train_step'], model['loss']], feed_dict={model['x']: batch_x, \
+            _, temp_loss = sess.run([model['train_step'], model['loss']], feed_dict={model['x_image']: batch_x, \
                                                                                      model['y']: batch_y, \
                                                                                      model['keep_prob']:config.keep_rate})
             training_loss.append(temp_loss)
         else:
-            sess.run(model['train_step'], feed_dict={model['x']: batch_x, \
+            sess.run(model['train_step'], feed_dict={model['x_image']: batch_x, \
                                                      model['y']: batch_y, \
                                                      model['keep_prob']:config.keep_rate})
 
 def generate_prediction(val_x, val_y, model, sess, list_to_pred):
 
-    predictions = sess.run([model[p] for p in list_to_pred], feed_dict={model['x']: val_x, \
+    predictions = sess.run([model[p] for p in list_to_pred], feed_dict={model['x_image']: val_x, \
                                                                         model['y']: val_y, \
                                                                         model['keep_prob']: 1.0})
     return predictions
@@ -88,7 +88,7 @@ def main(_):
     alldata.maybe_download_and_extract()
     train_data, _, train_labels = alldata.load_training_data()
     test_data, _, test_labels = alldata.load_test_data()
-    class_names = dataset.load_class_names()
+    class_names = alldata.load_class_names()
 
     iterations = int(train_data.shape[0] / configTrain.batch_size) # total training iterations in each epoch
 
@@ -108,10 +108,10 @@ def main(_):
 
                 train_model_for_one_epoch(iterations, train_data, train_labels, model, sess, configTrain, record_train_loss = True)
 
-                print("Epoch round ", epoch)
+                print("\nEpoch round ", epoch)
                 
-                val_loss = generate_prediction(test_data, test_labels, model, sess, ['loss'])[0]
-                print("Valiation loss ", val_loss)
+                val_loss, val_accuracy = generate_prediction(test_data, test_labels, model, sess, ['loss', 'accuracy'])
+                print("Valiation loss ", val_loss, " and accuracy ", val_accuracy)
 
                 epoch += 1
 
@@ -141,7 +141,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--savedSessionDir',
         type=str,
-        default='/home/weimin/workshop/savedSessions',
+        default='/home/weimin/workshop/savedSessions/',
         help="""\
         Directory where your created model / session will be saved.\
         """
