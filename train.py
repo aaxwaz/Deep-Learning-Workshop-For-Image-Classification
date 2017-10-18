@@ -2,11 +2,11 @@
 """Train and save the model"""
 
 import tensorflow as tf 
-import pandas as pd 
 import numpy as np 
 import os 
 import argparse
 import sys
+from datetime import datetime 
 
 import matplotlib
 matplotlib.use('Agg')
@@ -15,20 +15,24 @@ plt.ioff()
 
 from configuration import ModelConfig, TrainingConfig
 from build_graph import *
-from data_util import dataset
+from data_utils import dataset
+from vis_utils import visualize_grid
 
 FLAGS = None
 modelName = 'model_ema'
+PLOT_WEIGHTS_EVERY_EPOCH = 5
 
 configModel = ModelConfig()
 configTrain = TrainingConfig()
 
 training_loss = []
+validation_loss = []
+validation_accu = []
 
 def train_model_for_one_epoch(iterations, train_x, train_y, model, sess, config, record_train_loss = False):
 
     num_images = len(train_x)
-    for _ in range(iterations):
+    for i in range(iterations):
         # Create a random index.
         idx = np.random.choice(num_images,
                                size=config.batch_size,
@@ -36,50 +40,76 @@ def train_model_for_one_epoch(iterations, train_x, train_y, model, sess, config,
         batch_x = train_x[idx, :, :, :]
         batch_y = train_y[idx, :]
 
-        if record_train_loss: 
-            _, temp_loss = sess.run([model['train_step'], model['loss']], feed_dict={model['x_image']: batch_x, \
+        
+        _, temp_loss = sess.run([model['train_step'], model['loss']], feed_dict={model['x_image']: batch_x, \
                                                                                      model['y']: batch_y, \
+                                                                                     model['is_training']: True, \
                                                                                      model['keep_prob']:config.keep_rate})
+        if record_train_loss: 
             training_loss.append(temp_loss)
-        else:
-            sess.run(model['train_step'], feed_dict={model['x_image']: batch_x, \
-                                                     model['y']: batch_y, \
-                                                     model['keep_prob']:config.keep_rate})
+
+
 
 def generate_prediction(val_x, val_y, model, sess, list_to_pred):
 
     predictions = sess.run([model[p] for p in list_to_pred], feed_dict={model['x_image']: val_x, \
                                                                         model['y']: val_y, \
+                                                                        model['is_training']: False, \
                                                                         model['keep_prob']: 1.0})
     return predictions
 
-def generate_graph(val_y_preds, val_y, save = True):
+def plot_training_loss(train_loss, saveName):
 
-    total_tasks = val_y.shape[1]
+    plt.title('Training loss')
+    plt.plot(train_loss)
+    plt.xlabel('No. of training iteractions')
+    plt.ylabel('Training losses')
+    plt.savefig(saveName)
+    plt.close()
+    print("training losses saved at: ", saveName)
 
-    matplotlib.rcParams['figure.figsize'] = (5.0 * total_tasks, 5.0)
+def plot_val_loss_n_accuracy(validation_loss, validation_accu, saveName):
 
-    f, (axes) = plt.subplots(1, total_tasks, sharex=False, sharey=False)
+    fig, ax1 = plt.subplots()
+    ax1.plot(range(len(validation_loss)), validation_loss, 'b', )
+    ax1.set_xlabel('No. of training epochs')
+    ax1.set_ylabel('Val losses', color='b')
+    ax1.tick_params('y', colors='b')
 
-    st = f.suptitle("30-minute interval forecast for each task", fontsize="x-large")
+    ax2 = ax1.twinx()
+    ax2.plot(range(len(validation_accu)), validation_accu, 'g')
+    ax2.set_ylabel('Val accuracy', color='g')
+    ax2.tick_params('y', colors='g')
+    fig.tight_layout()
+    plt.savefig(saveName)
+    plt.close()
+    print("Validation losses and accuracy are saved: ", saveName)
 
-    for c in range(total_tasks):
-        axes[c].plot(np.exp(val_y[:, c])-1, color = 'orange', label = 'actual totals')
-        axes[c].plot(np.exp(val_y_preds[:, c])-1, color = 'green', label = 'predicted totals')
-        axes[c].set_title("Cluster {}".format(c))
-        axes[c].legend(loc="upper left")
+def vis_activations_from_model(train_data, model, sess, save_dir, seed=10):
 
-    if save:
-        f.savefig(os.path.join(FLAGS.savedSessionDir, 'tempResult.png'))
+    np.random.seed(seed)
+    idx = np.random.choice(train_data.shape[0],
+          size=1,
+          replace=False)
+    img = train_data[idx[0], :, :, :]
+    ## visualize layer-1 kernel weights in grid 
+    img = np.expand_dims(img, 0)
+    h_conv1_1 = sess.run(model['h_conv1_1'], feed_dict={model['x_image']:img})
+    h_conv1_1 = h_conv1_1.transpose(3, 1, 2, 0)   # reshape to: (N, H, W, 1)
+    vis_grid = visualize_grid(h_conv1_1, grey = True)
+    plot_weights_in_grid(vis_grid, os.path.join(save_dir, 'vis_activations.png'))
+
+def plot_weights_in_grid(vis_grid, saveName, gray = True):
+
+    if gray:
+        plt.imshow(vis_grid.astype('uint8'), cmap = 'gray')
     else:
-        plt.show()
-
-def get_target_col_names(paramsDumpDir):
-
-    target_cols = pd.read_csv(os.path.join(paramsDumpDir, 'targetColumns'), header = None)
-    target_cols = [value[0] for value in target_cols.values.tolist()]
-
-    return target_cols
+        plt.imshow(vis_grid.astype('uint8'))
+    plt.axis('off')
+    plt.gcf().set_size_inches(5, 5)
+    plt.savefig(saveName)
+    plt.close()
+    print("Visualization is saved at: ", saveName)
 
 def main(_):
 
@@ -103,27 +133,40 @@ def main(_):
         with tf.Session() as sess:
             sess.run(init)
 
+            ## start training epochs
             epoch = 1
             while epoch <= configTrain.epochs:
 
+                now = datetime.now()
                 train_model_for_one_epoch(iterations, train_data, train_labels, model, sess, configTrain, record_train_loss = True)
+                used_time = datetime.now() - now
 
-                print("\nEpoch round ", epoch)
+                print("\nEpoch round ", epoch, ' used {0} seconds. '.format(used_time.seconds))
                 
                 val_loss, val_accuracy = generate_prediction(test_data, test_labels, model, sess, ['loss', 'accuracy'])
+                validation_loss.append(val_loss)
+                validation_accu.append(val_accuracy)
                 print("Valiation loss ", val_loss, " and accuracy ", val_accuracy)
+
+                ## if required, visualize activations from image 
+                if configTrain.vis_weights_every_epoch > 0 and epoch % configTrain.vis_weights_every_epoch == 0:
+
+                    vis_activations_from_model(train_data, model, sess, FLAGS.trainDir, 10)
 
                 epoch += 1
 
-            plt.plot(training_loss)
-            plt.show()
+            ## upon training done, plot training & validation losses and validation accuracy
+            print("training done.")
+            plot_training_loss(training_loss, os.path.join(FLAGS.trainDir, 'train_losses.png'))
+            plot_val_loss_n_accuracy(validation_loss, validation_accu, os.path.join(FLAGS.trainDir, 'val_losses_n_accuracy.png'))
 
+            ## save trained session
             if not os.path.exists(FLAGS.savedSessionDir):
                 os.makedirs(FLAGS.savedSessionDir)
             temp_saver = model['saver']()
             save_path = temp_saver.save(sess, os.path.join(FLAGS.savedSessionDir, modelName))
 
-        print("\n\nTraining done. Model saved: ", os.path.join(FLAGS.savedSessionDir, modelName)) 
+        print("\nTraining done. Model saved: ", os.path.join(FLAGS.savedSessionDir, modelName)) 
 
 if __name__ == '__main__':
 
