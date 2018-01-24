@@ -1,0 +1,5 @@
+**/.ipynb_checkpoints/
+Hands-on-Zane.ipynb
+**/__pycache__/
+**/data/
+*.pyc
