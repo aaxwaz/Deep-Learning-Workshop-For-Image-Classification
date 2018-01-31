@@ -1,9 +1,17 @@
 # NUS Deep Learning workshop in Computer Vision
-Build am image classifier using Convolutional Neural Networks in TensorFlow
+Building am image classifier using Convolutional Neural Networks in TensorFlow as well as Keras. 
+
+For tutorials on TensorFlow, please refer to: 
+
+```TensorFlow_basic_CNN.ipynb```
+
+1. For tutorials on Keras (including use of pre-trained models of VGG and Inception-V3): 
+
+```keras_VGG_InceptionV3.ipynb```
 
 Files structure: 
 
-1. Training customerized CNN from scratch, run command line below 
+2. To train a customerized CNN from scratch, run command line below 
 
 ```python train.py --trainDir /dir/to/download/and/load/data/from/ --savedSessionDir /dir/to/save/your/model/session/```
 
@@ -16,12 +24,6 @@ data_utils - utils functions to download, save and load data
 vis_utils - util functions to visualize hidden / activation layers 
 ```
 
-2. Main tutorials for hands-on image classification - using CNN from scratch as well as pre-trained models such as VGG and Inception V3
-
-```
-TensorFlow_basic_CNN.ipynb
-keras_VGG_InceptionV3.ipynb
-```
 
 
 
