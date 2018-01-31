@@ -18,10 +18,10 @@ Files structure:
 Dependencies: 
 
 ```
-configuration - model architecture configuration 
-build_graph - main graph building for CNN model 
-data_utils - utils functions to download, save and load data 
-vis_utils - util functions to visualize hidden / activation layers 
+configuration.py # model architecture configuration 
+build_graph.py # main graph building for CNN model 
+data_utils.py # utils functions to download, save and load data 
+vis_utils.py # util functions to visualize hidden / activation layers 
 ```
 
 
